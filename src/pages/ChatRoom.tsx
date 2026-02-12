@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Ghost, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getRoom, leaveRoom, addMessage, type ChatMessage } from "@/lib/roomStore";
+import { useRealtimeRoom } from "@/hooks/useRealtimeRoom";
 import ChatBubble from "@/components/ChatBubble";
 import ChatInput from "@/components/ChatInput";
 
@@ -11,19 +11,23 @@ export default function ChatRoom() {
   const roomId = Number(id);
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const room = getRoom(roomId);
+  const { messages, users, error, joined, sendMessage } = useRealtimeRoom({
+    roomId,
+    username: user?.username || "",
+  });
 
+  // Redirect if not logged in or room is full
   useEffect(() => {
-    if (!user || !room) {
+    if (!user) {
       navigate("/dashboard");
       return;
     }
-    // Load existing messages (in case user is already joined)
-    setMessages([...room.messages]);
-  }, [user, room, navigate]);
+    if (error === "room_full") {
+      navigate("/dashboard");
+    }
+  }, [user, error, navigate]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -31,19 +35,11 @@ export default function ChatRoom() {
   }, [messages]);
 
   const handleLeave = () => {
-    if (user) leaveRoom(roomId, user.username);
+    // Navigating away triggers cleanup in the hook (untrack + unsubscribe + clear state)
     navigate("/dashboard");
   };
 
-  const handleSend = (text: string) => {
-    if (!user) return;
-    const msg = addMessage(roomId, user.username, text);
-    if (msg) {
-      setMessages((prev) => [...prev, msg]);
-    }
-  };
-
-  if (!room || !user) return null;
+  if (!user) return null;
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -61,9 +57,16 @@ export default function ChatRoom() {
         </div>
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Users className="h-4 w-4" />
-          <span>{room.users.length}/2</span>
+          <span>{users.length}/2</span>
         </div>
       </header>
+
+      {/* Connection status */}
+      {!joined && (
+        <div className="flex items-center justify-center bg-secondary/50 px-4 py-2">
+          <p className="text-xs text-muted-foreground animate-pulse">Connecting...</p>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -81,12 +84,17 @@ export default function ChatRoom() {
           </div>
         )}
         {messages.map((msg) => (
-          <ChatBubble key={msg.id} message={msg} isOwn={msg.sender === user.username} />
+          <ChatBubble
+            key={msg.id}
+            message={msg}
+            isOwn={msg.sender === user.username}
+            isSystem={msg.sender === "system"}
+          />
         ))}
       </div>
 
       {/* Input */}
-      <ChatInput onSend={handleSend} />
+      <ChatInput onSend={sendMessage} />
     </div>
   );
 }

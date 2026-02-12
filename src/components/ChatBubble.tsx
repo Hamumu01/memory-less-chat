@@ -1,15 +1,26 @@
-import type { ChatMessage } from "@/lib/roomStore";
+import type { ChatMessage } from "@/hooks/useRealtimeRoom";
 
 interface ChatBubbleProps {
   message: ChatMessage;
   isOwn: boolean;
+  isSystem?: boolean;
 }
 
-export default function ChatBubble({ message, isOwn }: ChatBubbleProps) {
+export default function ChatBubble({ message, isOwn, isSystem }: ChatBubbleProps) {
   const time = new Date(message.timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  if (isSystem) {
+    return (
+      <div className="flex justify-center ghost-slide-up">
+        <p className="text-xs text-muted-foreground/60 italic py-1">
+          {message.text}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div

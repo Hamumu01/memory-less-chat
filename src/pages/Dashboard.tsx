@@ -1,21 +1,33 @@
 import { useNavigate } from "react-router-dom";
 import { Ghost, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useRoomState, joinRoom } from "@/lib/roomStore";
+import { useRoomPresence } from "@/hooks/useRoomPresence";
 import RoomCard from "@/components/RoomCard";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { rooms, refresh } = useRoomState();
+  const { rooms, getUserCurrentRoom } = useRoomPresence(user?.username);
 
   const handleJoin = (roomId: number) => {
     if (!user) return;
-    const ok = joinRoom(roomId, user.username);
-    if (ok) {
-      navigate(`/room/${roomId}`);
+
+    // Prevent same username in two rooms simultaneously
+    const currentRoom = getUserCurrentRoom();
+    if (currentRoom !== null) {
+      toast.error(`You're already active in Room ${currentRoom}. Leave it first.`);
+      return;
     }
-    refresh();
+
+    // Check capacity before navigating
+    const room = rooms.find((r) => r.id === roomId);
+    if (room && room.userCount >= 2) {
+      toast.error("Room is full!");
+      return;
+    }
+
+    navigate(`/room/${roomId}`);
   };
 
   const handleLogout = () => {
@@ -57,7 +69,11 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} onJoin={handleJoin} />
+            <RoomCard
+              key={room.id}
+              room={{ id: room.id, users: room.users, messages: [] }}
+              onJoin={handleJoin}
+            />
           ))}
         </div>
 
