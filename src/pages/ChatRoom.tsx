@@ -16,6 +16,7 @@ export default function ChatRoom() {
   const { messages, users, error, joined, sendMessage } = useRealtimeRoom({
     roomId,
     username: user?.username || "",
+    userId: user?.id || "",
   });
 
   // Redirect if not logged in or room is full

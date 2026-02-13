@@ -8,11 +8,7 @@ export interface RoomStatus {
   users: string[];
 }
 
-/**
- * Subscribes to presence on all 10 rooms to show live status on the dashboard.
- * Also checks that a username isn't already active in another room.
- */
-export function useRoomPresence(username: string | undefined) {
+export function useRoomPresence(userId: string | undefined) {
   const [rooms, setRooms] = useState<RoomStatus[]>(
     Array.from({ length: 10 }, (_, i) => ({
       id: i + 1,
@@ -23,7 +19,7 @@ export function useRoomPresence(username: string | undefined) {
   const channelsRef = useRef<RealtimeChannel[]>([]);
 
   useEffect(() => {
-    if (!username) return;
+    if (!userId) return;
 
     const channels: RealtimeChannel[] = [];
 
@@ -35,7 +31,10 @@ export function useRoomPresence(username: string | undefined) {
 
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
-        const usernames = Object.keys(state);
+        // Extract usernames from presence metadata
+        const usernames = Object.values(state).map(
+          (presences) => (presences as any[])[0]?.username || "unknown"
+        );
         setRooms((prev) =>
           prev.map((r) =>
             r.id === roomId
@@ -55,12 +54,11 @@ export function useRoomPresence(username: string | undefined) {
       channels.forEach((ch) => ch.unsubscribe());
       channelsRef.current = [];
     };
-  }, [username]);
+  }, [userId]);
 
-  // Check if user is already in a room
-  const getUserCurrentRoom = (): number | null => {
+  const getUserCurrentRoom = (username: string): number | null => {
     for (const room of rooms) {
-      if (room.users.includes(username || "")) {
+      if (room.users.includes(username)) {
         return room.id;
       }
     }

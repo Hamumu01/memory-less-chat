@@ -8,13 +8,13 @@ import { toast } from "sonner";
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { rooms, getUserCurrentRoom } = useRoomPresence(user?.username);
+  const { rooms, getUserCurrentRoom } = useRoomPresence(user?.id);
 
   const handleJoin = (roomId: number) => {
     if (!user) return;
 
     // Prevent same username in two rooms simultaneously
-    const currentRoom = getUserCurrentRoom();
+    const currentRoom = getUserCurrentRoom(user.username);
     if (currentRoom !== null) {
       toast.error(`You're already active in Room ${currentRoom}. Leave it first.`);
       return;

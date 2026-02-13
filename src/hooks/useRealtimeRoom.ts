@@ -16,36 +16,34 @@ interface RoomUser {
 interface UseRealtimeRoomOptions {
   roomId: number;
   username: string;
+  userId: string;
 }
 
-export function useRealtimeRoom({ roomId, username }: UseRealtimeRoomOptions) {
+export function useRealtimeRoom({ roomId, username, userId }: UseRealtimeRoomOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [users, setUsers] = useState<RoomUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
-  // Join room via Presence
   useEffect(() => {
-    if (!roomId || !username) return;
+    if (!roomId || !username || !userId) return;
 
     const channelName = `ghost-room-${roomId}`;
+    // Use userId as the presence key to prevent spoofing
     const channel = supabase.channel(channelName, {
-      config: { presence: { key: username } },
+      config: { presence: { key: userId } },
     });
 
     channelRef.current = channel;
 
-    // Listen for presence sync to track users
     channel.on("presence", { event: "sync" }, () => {
       const state = channel.presenceState();
-      const currentUsers: RoomUser[] = Object.keys(state).map((key) => ({
-        username: key,
+      const currentUsers: RoomUser[] = Object.entries(state).map(([_uid, presences]) => ({
+        username: (presences as any[])[0]?.username || "unknown",
       }));
 
-      // Enforce 2-user limit: if already 2 users and we're not one of them, reject
       if (currentUsers.length > 2) {
-        // This shouldn't happen due to pre-check, but safeguard
         setError("room_full");
         channel.unsubscribe();
         return;
@@ -54,59 +52,59 @@ export function useRealtimeRoom({ roomId, username }: UseRealtimeRoomOptions) {
       setUsers(currentUsers);
     });
 
-    // Listen for broadcast messages (zero persistence — relay only)
+    // Validate sender on incoming broadcast messages
     channel.on("broadcast", { event: "message" }, ({ payload }) => {
-      if (payload) {
+      if (payload && payload.senderId && payload.senderId !== userId) {
+        // Only accept messages from other users (own messages added locally)
         setMessages((prev) => [...prev, payload as ChatMessage]);
       }
     });
 
-    // Listen for system events (user joined/left notifications)
     channel.on("presence", { event: "join" }, ({ key }) => {
-      if (key !== username) {
+      if (key !== userId) {
+        const state = channel.presenceState();
+        const joinedPresence = state[key];
+        const joinedUsername = joinedPresence ? (joinedPresence as any[])[0]?.username : "someone";
         const systemMsg: ChatMessage = {
           id: crypto.randomUUID(),
           sender: "system",
-          text: `${key} joined the room`,
+          text: `${joinedUsername} joined the room`,
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, systemMsg]);
       }
     });
 
-    channel.on("presence", { event: "leave" }, ({ key }) => {
-      if (key !== username) {
+    channel.on("presence", { event: "leave" }, ({ key, leftPresences }) => {
+      if (key !== userId) {
+        const leftUsername = leftPresences?.[0]?.username || "someone";
         const systemMsg: ChatMessage = {
           id: crypto.randomUUID(),
           sender: "system",
-          text: `${key} left the room`,
+          text: `${leftUsername} left the room`,
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, systemMsg]);
       }
     });
 
-    // Subscribe and track presence
-    channel
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          // Check current presence before joining
-          const state = channel.presenceState();
-          const currentCount = Object.keys(state).length;
+    channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        const state = channel.presenceState();
+        const currentCount = Object.keys(state).length;
 
-          if (currentCount >= 2) {
-            setError("room_full");
-            channel.unsubscribe();
-            return;
-          }
-
-          // Track our presence
-          await channel.track({ username, joined_at: Date.now() });
-          setJoined(true);
+        if (currentCount >= 2) {
+          setError("room_full");
+          channel.unsubscribe();
+          return;
         }
-      });
 
-    // Cleanup: untrack and unsubscribe (wipes all local state)
+        // Track presence with both userId (key) and username (metadata)
+        await channel.track({ username, userId, joined_at: Date.now() });
+        setJoined(true);
+      }
+    });
+
     return () => {
       channel.untrack();
       channel.unsubscribe();
@@ -115,9 +113,8 @@ export function useRealtimeRoom({ roomId, username }: UseRealtimeRoomOptions) {
       setUsers([]);
       setJoined(false);
     };
-  }, [roomId, username]);
+  }, [roomId, username, userId]);
 
-  // Send message via broadcast (never stored)
   const sendMessage = useCallback(
     (text: string) => {
       if (!channelRef.current || !joined) return;
@@ -129,14 +126,14 @@ export function useRealtimeRoom({ roomId, username }: UseRealtimeRoomOptions) {
       };
       // Add to own messages immediately
       setMessages((prev) => [...prev, msg]);
-      // Broadcast to others
+      // Broadcast with senderId for verification
       channelRef.current.send({
         type: "broadcast",
         event: "message",
-        payload: msg,
+        payload: { ...msg, senderId: userId },
       });
     },
-    [joined, username]
+    [joined, username, userId]
   );
 
   return { messages, users, error, joined, sendMessage };
