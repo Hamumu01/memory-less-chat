@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface User {
+  id: string;
   username: string;
 }
 
@@ -16,10 +17,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function extractUsername(supabaseUser: SupabaseUser | null): User | null {
+function extractUser(supabaseUser: SupabaseUser | null): User | null {
   if (!supabaseUser) return null;
   const username = supabaseUser.user_metadata?.username;
-  return username ? { username } : null;
+  return username ? { id: supabaseUser.id, username } : null;
 }
 
 // Convert username to a synthetic email for Supabase Auth
@@ -34,13 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Listen for auth state changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(extractUsername(session?.user ?? null));
+      setUser(extractUser(session?.user ?? null));
       setLoading(false);
     });
 
-    // Check existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(extractUsername(session?.user ?? null));
+      setUser(extractUser(session?.user ?? null));
       setLoading(false);
     });
 
