@@ -7,19 +7,22 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!username.trim() || !password) {
       setError("All fields are required");
       return;
     }
-    const ok = login(username.trim(), password);
-    if (!ok) {
-      setError("Invalid credentials or user not found");
+    setSubmitting(true);
+    const result = await login(username.trim(), password);
+    setSubmitting(false);
+    if (!result.ok) {
+      setError(result.error || "Login failed");
       return;
     }
     navigate("/dashboard");
@@ -70,8 +73,8 @@ export default function Login() {
             <p className="text-xs text-destructive">{error}</p>
           )}
 
-          <button type="submit" className="w-full glow-btn rounded-lg py-2.5 text-sm">
-            Enter the Void
+          <button type="submit" disabled={submitting} className="w-full glow-btn rounded-lg py-2.5 text-sm disabled:opacity-50">
+            {submitting ? "Signing in..." : "Enter the Void"}
           </button>
         </form>
 

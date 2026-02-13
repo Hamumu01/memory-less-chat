@@ -8,10 +8,11 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!username.trim() || !password || !confirm) {
@@ -26,9 +27,11 @@ export default function Register() {
       setError("Passwords do not match");
       return;
     }
-    const ok = register(username.trim(), password);
-    if (!ok) {
-      setError("Username already taken");
+    setSubmitting(true);
+    const result = await register(username.trim(), password);
+    setSubmitting(false);
+    if (!result.ok) {
+      setError(result.error || "Registration failed");
       return;
     }
     navigate("/dashboard");
@@ -92,8 +95,8 @@ export default function Register() {
             <p className="text-xs text-destructive">{error}</p>
           )}
 
-          <button type="submit" className="w-full glow-btn rounded-lg py-2.5 text-sm">
-            Become a Ghost
+          <button type="submit" disabled={submitting} className="w-full glow-btn rounded-lg py-2.5 text-sm disabled:opacity-50">
+            {submitting ? "Creating..." : "Become a Ghost"}
           </button>
         </form>
 
