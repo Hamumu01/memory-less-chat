@@ -30,8 +30,8 @@ export default function Dashboard() {
     navigate(`/room/${roomId}`);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
