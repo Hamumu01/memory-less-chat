@@ -13,11 +13,12 @@ export default function ChatRoom() {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { messages, users, error, joined, sendMessage } = useRealtimeRoom({
-    roomId,
-    username: user?.username || "",
-    userId: user?.id || "",
-  });
+  const { messages, users, error, joined, typingUsers, rateLimited, sendMessage, sendTyping } =
+    useRealtimeRoom({
+      roomId,
+      username: user?.username || "",
+      userId: user?.id || "",
+    });
 
   // Redirect if not logged in or room is full
   useEffect(() => {
@@ -41,6 +42,16 @@ export default function ChatRoom() {
   };
 
   if (!user) return null;
+
+  // Format typing indicator text
+  const typingText =
+    typingUsers.length === 1
+      ? `${typingUsers[0]} is typing...`
+      : typingUsers.length === 2
+        ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+        : typingUsers.length > 2
+          ? "Several people are typing..."
+          : null;
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -94,8 +105,15 @@ export default function ChatRoom() {
         ))}
       </div>
 
+      {/* Typing indicator */}
+      {typingText && (
+        <div className="px-4 py-1.5">
+          <p className="text-xs text-muted-foreground animate-pulse">{typingText}</p>
+        </div>
+      )}
+
       {/* Input */}
-      <ChatInput onSend={sendMessage} />
+      <ChatInput onSend={sendMessage} onTyping={sendTyping} rateLimited={rateLimited} />
     </div>
   );
 }
